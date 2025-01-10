@@ -166,3 +166,6 @@ opentelemetry-exporter-otlp
    - Grafana: `http://localhost:3000`
    - Prometheus: `http://localhost:9090`
    - VictoriaMetrics: `http://localhost:8428`
+
+Example Grafana dashboard:
+![grafana.png](img/grafana.png)
