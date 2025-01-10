@@ -1,0 +1,131 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    volumes:
+      - ./otel-collector/otel-collector-config.yaml:/etc/otel/config.yaml
+    command: ["--config", "/etc/otel/config.yaml"]
+    ports:
+      - "4317:4317"       # OTLP gRPC port
+      - "4318:4318"       # OTLP HTTP port
+      - "8889:8889"       # Prometheus port
+    depends_on:
+      - prometheus
+      - victoria-metrics
+      - mimir
+      - thanos-sidecar
+      - thanos-query
+    networks:
+      - test-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-pyroscope-app
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - ./grafana/grafana-datasource-config.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      - ./grafana/dashboard_provisioning.yaml:/etc/grafana/provisioning/dashboards/dashboard_provisioning.yaml
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - test-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - test-net
+
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:latest
+    container_name: victoria-metrics
+    ports:
+      - "8428:8428"
+    command:
+      - '--storageDataPath=/victoria-metrics-data'
+      - '--retentionPeriod=12'
+      - '--promscrape.config=/etc/promscrape.yml'
+    volumes:
+      - vmdata:/victoria-metrics-data
+      - ./vm/promscrape.yml:/etc/promscrape.yml
+    networks:
+      - test-net
+
+  mimir:
+    image: grafana/mimir:latest
+    container_name: mimir
+    ports:
+      - "9009:9009"
+    environment:
+      - DATA_PATH=/data
+    volumes:
+      - mimir-data:/data
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml
+    command: ["--config.file=/etc/mimir/mimir.yaml"]
+    networks:
+      - test-net
+
+  metrics-sender:
+    build: ./app
+    container_name: metrics-sender
+    environment:
+      - OTEL_COLLECTOR_ENDPOINT=otel-collector:4317
+    depends_on:
+      - otel-collector
+    networks:
+      - test-net
+
+  thanos-sidecar:
+    image: thanosio/thanos:v0.37.2
+    container_name: thanos-sidecar
+    depends_on:
+      - prometheus
+    volumes:
+      - prometheus-data:/prometheus
+      - thanos-data:/thanos  # дополнительное хранилище, если нужно
+    ports:
+      - "10901:10901"
+    command: >
+      sidecar
+      --tsdb.path=/prometheus
+      --prometheus.url=http://prometheus:9090
+    networks:
+      - test-net
+
+  thanos-query:
+    image: thanosio/thanos:v0.37.2
+    container_name: thanos-query
+    depends_on:
+      - thanos-sidecar
+    ports:
+      - "9091:9091"
+    command: >
+      query
+      --http-address=0.0.0.0:9091
+      --store=thanos-sidecar:10901
+    networks:
+      - test-net
+
+volumes:
+  mimir-data:
+    driver: local
+  vmdata:
+    driver: local
+  prometheus-data:
+    driver: local
+  thanos-data:
+    driver: local
+
+networks:
+  test-net:
+    driver: bridge

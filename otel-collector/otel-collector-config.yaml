@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: :4317
+      http:
+        endpoint: :4318
+
+exporters:
+  prometheus/prometheus:
+    endpoint: "0.0.0.0:8889"
+  otlphttp/mimir:
+    endpoint: "http://mimir:9009/otlp"
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [prometheus/prometheus, otlphttp/mimir]
