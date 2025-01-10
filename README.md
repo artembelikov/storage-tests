@@ -33,6 +33,29 @@ The `storage-tests` project is designed to test various storage solutions and vi
 
 ---
 
+## Architecture
+
+```mermaid
+graph TD
+    subgraph Metrics Generation
+        A[send_metrics] --> B[otel-collector]
+    end
+    
+    subgraph Metrics Storage
+        B --> C[Prometheus]
+        B --> D[Victoria Metrics]
+        B --> E[Mimir Endpoint]
+    end
+
+    subgraph Visualization
+        C --> F[Thanos]
+        C --> G[Grafana]
+        D --> G
+        E --> G
+        F --> G
+    end
+``` 
+
 ## Key Components
 
 ### 1. OpenTelemetry Collector
